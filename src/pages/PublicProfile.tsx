@@ -36,6 +36,7 @@ export default function PublicProfile() {
         if (!snapshot.empty) {
           const userData = snapshot.docs[0].data() as UserProfile;
           setUser(userData);
+          document.title = `Send a message to @${userData.username} | WhisperLink`;
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, 'users');

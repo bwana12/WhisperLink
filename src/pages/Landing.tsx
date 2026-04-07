@@ -7,6 +7,10 @@ import { useAuth } from '../components/AuthProvider';
 export default function Landing() {
   const { user } = useAuth();
 
+  React.useEffect(() => {
+    document.title = 'WhisperLink | Anonymous Messaging';
+  }, []);
+
   return (
     <div className="min-h-screen bg-white text-black selection:bg-black selection:text-white">
       {/* Navigation */}

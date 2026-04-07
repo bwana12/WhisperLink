@@ -71,6 +71,7 @@ export default function Dashboard() {
     };
 
     fetchProfile();
+    document.title = 'Your Inbox | WhisperLink';
 
     // Listen for messages
     const q = query(

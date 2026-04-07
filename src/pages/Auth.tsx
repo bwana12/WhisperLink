@@ -22,6 +22,10 @@ export default function Auth() {
 
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    document.title = isLogin ? 'Sign In | WhisperLink' : 'Create Account | WhisperLink';
+  }, [isLogin]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
