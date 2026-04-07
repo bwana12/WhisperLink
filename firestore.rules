@@ -13,23 +13,33 @@ service cloud.firestore {
     //   - email: string (required)
     //   - createdAt: timestamp (required)
     //   - photoURL: string (optional)
+    //   - theme: string (optional)
+    //   - prompts: list (optional)
+    //   - blacklist: list (optional)
+    //   - isDarkMode: bool (optional)
+    //   - avatarConfig: string (optional)
     //
     // Collection: messages
     // Document ID: auto-generated
     // Fields:
     //   - recipientId: string (required)
-    //   - content: string (required, max 500 chars)
+    //   - content: string (required, max 1000 chars)
     //   - createdAt: timestamp (required)
     //   - isRead: bool (required)
     //   - isReported: bool (optional)
+    //   - reactions: map (optional)
+    //   - reply: string (optional)
+    //   - isVoice: bool (optional)
+    //   - voiceUrl: string (optional)
+    //   - status: string (optional, delivered/read)
     //
-    // Collection: reports
-    // Document ID: auto-generated
+    // Collection: analytics
+    // Document ID: auto-generated (e.g., userId_date)
     // Fields:
-    //   - messageId: string (required)
-    //   - recipientId: string (required)
-    //   - reason: string (required)
-    //   - createdAt: timestamp (required)
+    //   - userId: string (required)
+    //   - date: string (required, YYYY-MM-DD)
+    //   - visits: number (required)
+    //   - messagesReceived: number (required)
     //
     // ===============================================================
 
@@ -49,23 +59,29 @@ service cloud.firestore {
              data.userId is string &&
              data.username is string && data.username.size() >= 3 && data.username.size() <= 20 &&
              data.email is string &&
-             data.createdAt is timestamp;
+             data.createdAt is timestamp &&
+             (!('prompts' in data) || data.prompts is list) &&
+             (!('blacklist' in data) || data.blacklist is list) &&
+             (!('theme' in data) || data.theme is string) &&
+             (!('avatarConfig' in data) || data.avatarConfig is string);
     }
 
     function isValidMessage(data) {
       return data.keys().hasAll(['recipientId', 'content', 'createdAt', 'isRead']) &&
              data.recipientId is string &&
-             data.content is string && data.content.size() > 0 && data.content.size() <= 500 &&
+             data.content is string && data.content.size() > 0 && data.content.size() <= 1000 &&
              data.createdAt is timestamp &&
-             data.isRead == false;
+             data.isRead == false &&
+             (!('isVoice' in data) || data.isVoice is bool) &&
+             (!('voiceUrl' in data) || data.voiceUrl is string);
     }
 
-    function isValidReport(data) {
-      return data.keys().hasAll(['messageId', 'recipientId', 'reason', 'createdAt']) &&
-             data.messageId is string &&
-             data.recipientId is string &&
-             data.reason is string && data.reason.size() > 0 && data.reason.size() <= 500 &&
-             data.createdAt is timestamp;
+    function isValidAnalytics(data) {
+      return data.keys().hasAll(['userId', 'date', 'visits', 'messagesReceived']) &&
+             data.userId is string &&
+             data.date is string &&
+             data.visits is number &&
+             data.messagesReceived is number;
     }
 
     // ===============================================================
@@ -73,15 +89,6 @@ service cloud.firestore {
     // ===============================================================
 
     match /users/{userId} {
-      // Users can read any profile (to check if username exists for public link)
-      // BUT we should limit what they see. However, Firestore rules are all-or-nothing for a doc.
-      // So we must be careful. The user doc contains email.
-      // CRITICAL: Limit read to owner only if it contains PII.
-      // We'll allow public read for username check, but we should ideally split public/private.
-      // For this app, we'll allow public read of the user doc but warn that email is public.
-      // Better: Only allow read if it's the owner, OR if we are just checking username.
-      // Actually, to send a message, we need to know the recipientId from the username.
-      // We'll allow public read for now but recommend splitting in production.
       allow read: if true; 
       allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
       allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
@@ -90,27 +97,27 @@ service cloud.firestore {
     }
 
     match /messages/{messageId} {
-      // Only the recipient can read their messages
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.recipientId;
+      // Senders can read their own message if they have the ID (for read receipts)
+      allow read: if (isAuthenticated() && request.auth.uid == resource.data.recipientId) || 
+                    (resource.data.status == 'delivered' || resource.data.status == 'read');
       
-      // Anyone can create a message (anonymous)
       allow create: if isValidMessage(request.resource.data);
       
-      // Only the recipient can update (mark as read/reported)
-      allow update: if isAuthenticated() && request.auth.uid == resource.data.recipientId &&
-                    request.resource.data.recipientId == resource.data.recipientId &&
-                    request.resource.data.content == resource.data.content &&
-                    request.resource.data.createdAt == resource.data.createdAt;
+      allow update: if (isAuthenticated() && request.auth.uid == resource.data.recipientId) ||
+                    (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reactions', 'reply']) && 
+                     (isAuthenticated() && request.auth.uid == resource.data.recipientId));
       
-      // Only the recipient can delete
       allow delete: if isAuthenticated() && request.auth.uid == resource.data.recipientId;
     }
 
+    match /analytics/{analyticsId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if true; // Allow anyone to start an analytics doc for a user
+      allow update: if true; // Allow anyone to increment visits/messages
+    }
+
     match /reports/{reportId} {
-      // Only the recipient of the message can create a report
-      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.recipientId && isValidReport(request.resource.data);
-      
-      // Only admins (or nobody for now) can read reports
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.recipientId;
       allow read: if false;
     }
   }

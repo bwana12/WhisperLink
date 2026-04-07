@@ -9,7 +9,12 @@
         "username": { "type": "string", "description": "Unique username for the public link" },
         "email": { "type": "string", "format": "email" },
         "createdAt": { "type": "string", "format": "date-time" },
-        "photoURL": { "type": "string", "format": "uri" }
+        "photoURL": { "type": "string", "format": "uri" },
+        "theme": { "type": "string", "description": "Custom theme identifier for public profile" },
+        "prompts": { "type": "array", "items": { "type": "string" }, "description": "List of prompt templates" },
+        "blacklist": { "type": "array", "items": { "type": "string" }, "description": "Blocked words" },
+        "isDarkMode": { "type": "boolean" },
+        "avatarConfig": { "type": "string", "description": "DiceBear avatar seed or config" }
       },
       "required": ["userId", "username", "email", "createdAt"]
     },
@@ -23,9 +28,26 @@
         "content": { "type": "string", "description": "The message text" },
         "createdAt": { "type": "string", "format": "date-time" },
         "isRead": { "type": "boolean" },
-        "isReported": { "type": "boolean" }
+        "isReported": { "type": "boolean" },
+        "reactions": { "type": "object", "description": "Map of emoji reactions" },
+        "reply": { "type": "string", "description": "Public reply from the recipient" },
+        "isVoice": { "type": "boolean" },
+        "voiceUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["delivered", "read"] }
       },
       "required": ["recipientId", "content", "createdAt", "isRead"]
+    },
+    "Analytics": {
+      "title": "Analytics",
+      "description": "Daily activity tracking for a user",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "visits": { "type": "number" },
+        "messagesReceived": { "type": "number" }
+      },
+      "required": ["userId", "date", "visits", "messagesReceived"]
     },
     "Report": {
       "title": "Report",
@@ -53,6 +75,10 @@
     "/reports/{reportId}": {
       "schema": "Report",
       "description": "Message reports"
+    },
+    "/analytics/{analyticsId}": {
+      "schema": "Analytics",
+      "description": "User activity analytics"
     }
   }
 }

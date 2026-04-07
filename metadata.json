@@ -1,5 +1,5 @@
 {
   "name": "WhisperLink",
   "description": "A premium anonymous messaging platform. Create your personal link and receive honest feedback from your friends and followers.",
-  "requestFramePermissions": []
+  "requestFramePermissions": ["microphone"]
 }

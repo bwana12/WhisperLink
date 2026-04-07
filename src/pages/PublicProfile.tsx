@@ -6,17 +6,39 @@ import {
   where, 
   getDocs, 
   addDoc, 
-  Timestamp 
+  Timestamp,
+  orderBy,
+  limit
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { MessageSquare, Send, Shield, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
+import { 
+  MessageSquare, 
+  Send, 
+  Shield, 
+  ArrowLeft, 
+  Loader2, 
+  CheckCircle2, 
+  Mic, 
+  AlertCircle,
+  Sparkles,
+  RefreshCcw
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
+import { moderateContent } from '../services/moderationService';
+import { trackVisit, trackMessage } from '../services/analyticsService';
+import { THEMES } from '../constants/themes';
+import VoiceRecorder from '../components/VoiceRecorder';
 
 interface UserProfile {
   userId: string;
   username: string;
   photoURL: string;
+  theme?: string;
+  prompts?: string[];
+  blacklist?: string[];
+  avatarConfig?: string;
 }
 
 export default function PublicProfile() {
@@ -26,6 +48,9 @@ export default function PublicProfile() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [message, setMessage] = useState('');
+  const [activePrompt, setActivePrompt] = useState<string | null>(null);
+  const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -37,6 +62,14 @@ export default function PublicProfile() {
           const userData = snapshot.docs[0].data() as UserProfile;
           setUser(userData);
           document.title = `Send a message to @${userData.username} | WhisperLink`;
+          
+          // Track visit
+          trackVisit(userData.userId);
+
+          // Set random prompt if available
+          if (userData.prompts && userData.prompts.length > 0) {
+            setActivePrompt(userData.prompts[Math.floor(Math.random() * userData.prompts.length)]);
+          }
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, 'users');
@@ -50,19 +83,64 @@ export default function PublicProfile() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !message.trim() || sending) return;
+    if (!user || (!message.trim() && !voiceBlob) || sending) return;
+
+    // Rate limiting check (client-side)
+    const lastSent = localStorage.getItem(`last_sent_${user.userId}`);
+    if (lastSent && Date.now() - parseInt(lastSent) < 60000) {
+      toast.error('Please wait 60 seconds between messages.');
+      return;
+    }
+
+    // Blacklist check
+    if (user.blacklist && message) {
+      const lowerMessage = message.toLowerCase();
+      const isBlocked = user.blacklist.some(word => lowerMessage.includes(word.toLowerCase()));
+      if (isBlocked) {
+        toast.error('Your message contains blocked words.');
+        return;
+      }
+    }
 
     setSending(true);
     try {
+      // AI Moderation
+      if (message) {
+        const moderation = await moderateContent(message);
+        if (!moderation.isSafe) {
+          toast.error(`Message blocked: ${moderation.reason}`);
+          setSending(false);
+          return;
+        }
+      }
+
+      let voiceUrl = '';
+      if (voiceBlob) {
+        const voiceRef = ref(storage, `voices/${user.userId}/${Date.now()}.webm`);
+        await uploadBytes(voiceRef, voiceBlob);
+        voiceUrl = await getDownloadURL(voiceRef);
+      }
+
       await addDoc(collection(db, 'messages'), {
         recipientId: user.userId,
-        content: message.trim(),
+        content: message.trim() || '🎤 Voice Whisper',
         createdAt: Timestamp.now(),
         isRead: false,
+        isVoice: !!voiceBlob,
+        voiceUrl: voiceUrl,
+        status: 'delivered'
       });
+
+      // Track message
+      trackMessage(user.userId);
+      
+      // Update rate limit
+      localStorage.setItem(`last_sent_${user.userId}`, Date.now().toString());
+
       setSent(true);
       setMessage('');
-      toast.success('Message sent anonymously!');
+      setVoiceBlob(null);
+      toast.success('Whisper sent anonymously!');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'messages');
     } finally {
@@ -93,18 +171,37 @@ export default function PublicProfile() {
     );
   }
 
+  const theme = THEMES[user.theme || 'default'] || THEMES.default;
+
+  const [publicMessages, setPublicMessages] = useState<any[]>([]);
+  const [showFeed, setShowFeed] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'messages'),
+      where('recipientId', '==', user.userId),
+      where('reply', '!=', null),
+      orderBy('reply'), // This is a trick to filter for non-null replies
+      limit(10)
+    );
+    getDocs(q).then(snapshot => {
+      setPublicMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+  }, [user]);
+
   return (
-    <div className="min-h-screen bg-white selection:bg-black selection:text-white">
+    <div className={`min-h-screen ${theme.background} selection:bg-black selection:text-white transition-colors duration-700`}>
       {/* Header */}
-      <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
+      <nav className={`fixed top-0 w-full z-50 ${theme.background}/80 backdrop-blur-md border-b border-black/5`}>
         <div className="max-w-3xl mx-auto px-6 h-20 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group">
+          <Link to="/" className={`flex items-center gap-2 group ${theme.text}`}>
             <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-            <span className="font-medium text-sm">Back to WhisperLink</span>
+            <span className="font-medium text-sm">WhisperLink</span>
           </Link>
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-green-500" />
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Secure & Anonymous</span>
+            <span className={`text-xs font-bold ${theme.text} opacity-40 uppercase tracking-widest`}>Secure & Anonymous</span>
           </div>
         </div>
       </nav>
@@ -123,79 +220,153 @@ export default function PublicProfile() {
                 <div className="text-center">
                   <div className="relative inline-block mb-6">
                     <img 
-                      src={user.photoURL} 
+                      src={user.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`} 
                       alt={user.username}
                       className="w-24 h-24 rounded-3xl object-cover border-4 border-white shadow-xl"
                       referrerPolicy="no-referrer"
                     />
-                    <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-black rounded-xl flex items-center justify-center shadow-lg">
+                    <div className={`absolute -bottom-2 -right-2 w-8 h-8 ${theme.accent} rounded-xl flex items-center justify-center shadow-lg`}>
                       <MessageSquare className="w-4 h-4 text-white" />
                     </div>
                   </div>
-                  <h1 className="text-3xl font-bold tracking-tight mb-2">Send a message to @{user.username}</h1>
-                  <p className="text-gray-500">They will never know who sent it. Be honest, be kind.</p>
+                  <h1 className={`text-3xl font-bold tracking-tight mb-2 ${theme.text}`}>Send a whisper to @{user.username}</h1>
+                  
+                  {activePrompt && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="mt-4 p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl inline-flex items-center gap-3"
+                    >
+                      <Sparkles className="w-4 h-4 text-yellow-500" />
+                      <p className={`text-sm font-medium ${theme.text}`}>{activePrompt}</p>
+                      <button 
+                        onClick={() => {
+                          if (user.prompts) {
+                            setActivePrompt(user.prompts[Math.floor(Math.random() * user.prompts.length)]);
+                          }
+                        }}
+                        className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                      >
+                        <RefreshCcw size={14} className={theme.text} />
+                      </button>
+                    </motion.div>
+                  )}
                 </div>
 
-                <form onSubmit={handleSendMessage} className="space-y-4">
-                  <div className="relative">
-                    <textarea
-                      required
-                      rows={6}
-                      maxLength={500}
-                      placeholder="Write your anonymous message here..."
-                      className="w-full p-8 bg-gray-50 rounded-[2rem] border-2 border-transparent focus:border-black focus:bg-white transition-all outline-none text-xl font-medium resize-none"
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                    />
-                    <div className="absolute bottom-6 right-8 text-xs font-bold text-gray-400 uppercase tracking-widest">
-                      {message.length} / 500
+                <div className="flex justify-center gap-4 mb-8">
+                  <button
+                    onClick={() => setIsVoiceMode(false)}
+                    className={`px-6 py-2 rounded-full text-sm font-bold transition-all ${!isVoiceMode ? theme.accent + ' text-white' : 'bg-white/10 ' + theme.text}`}
+                  >
+                    Text
+                  </button>
+                  <button
+                    onClick={() => setIsVoiceMode(true)}
+                    className={`px-6 py-2 rounded-full text-sm font-bold transition-all flex items-center gap-2 ${isVoiceMode ? theme.accent + ' text-white' : 'bg-white/10 ' + theme.text}`}
+                  >
+                    <Mic size={16} />
+                    Voice
+                  </button>
+                </div>
+
+                {isVoiceMode ? (
+                  <VoiceRecorder 
+                    onRecordingComplete={(blob) => setVoiceBlob(blob)}
+                    onCancel={() => setVoiceBlob(null)}
+                  />
+                ) : (
+                  <form onSubmit={handleSendMessage} className="space-y-4">
+                    <div className="relative">
+                      <textarea
+                        required
+                        rows={6}
+                        maxLength={1000}
+                        placeholder="Write your anonymous whisper here..."
+                        className={`w-full p-8 ${theme.card} rounded-[2rem] border-2 border-transparent focus:border-black transition-all outline-none text-xl font-medium resize-none ${theme.text}`}
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                      />
+                      <div className={`absolute bottom-6 right-8 text-xs font-bold ${theme.text} opacity-40 uppercase tracking-widest`}>
+                        {message.length} / 1000
+                      </div>
+                    </div>
+                  </form>
+                )}
+
+                <button
+                  disabled={sending || (!message.trim() && !voiceBlob)}
+                  onClick={handleSendMessage}
+                  className={`w-full py-5 ${theme.button} ${theme.buttonText} rounded-[2rem] text-lg font-bold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group shadow-xl`}
+                >
+                  {sending ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <>
+                      {isVoiceMode ? 'Send Voice Whisper' : 'Send Anonymously'}
+                      <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+
+                <div className={`flex items-center justify-center gap-2 ${theme.text} opacity-40`}>
+                  <Shield className="w-4 h-4" />
+                  <p className="text-sm">Your identity is protected by AI moderation.</p>
+                </div>
+
+                {publicMessages.length > 0 && (
+                  <div className="pt-12">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className={`text-xl font-bold ${theme.text}`}>Public Feed</h3>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${theme.accent} text-white`}>
+                        {publicMessages.length} Replies
+                      </span>
+                    </div>
+                    <div className="space-y-4">
+                      {publicMessages.map(msg => (
+                        <div key={msg.id} className={`${theme.card} p-6 rounded-3xl border shadow-sm`}>
+                          <p className={`text-lg font-medium mb-4 ${theme.text}`}>"{msg.content}"</p>
+                          <div className={`p-4 rounded-2xl ${theme.background} border border-black/5`}>
+                            <p className={`text-xs font-bold uppercase tracking-widest opacity-40 mb-2 ${theme.text}`}>Reply from @{user.username}</p>
+                            <p className={`font-medium ${theme.text}`}>{msg.reply}</p>
+                          </div>
+                          {msg.reactions && (
+                            <div className="flex gap-2 mt-4">
+                              {Object.entries(msg.reactions).map(([emoji, count]) => (
+                                <div key={emoji} className={`px-2 py-1 rounded-full text-xs bg-white/10 border border-white/20 ${theme.text}`}>
+                                  {emoji} {count as number}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   </div>
-
-                  <button
-                    disabled={sending || !message.trim()}
-                    type="submit"
-                    className="w-full py-5 bg-black text-white rounded-[2rem] text-lg font-bold hover:bg-gray-800 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 group"
-                  >
-                    {sending ? (
-                      <Loader2 className="w-6 h-6 animate-spin" />
-                    ) : (
-                      <>
-                        Send Anonymously
-                        <Send className="w-5 h-5 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                <div className="flex items-center justify-center gap-2 text-gray-400">
-                  <Shield className="w-4 h-4" />
-                  <p className="text-sm">Your IP and identity are not stored.</p>
-                </div>
+                )}
               </motion.div>
             ) : (
               <motion.div
                 key="success"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="text-center py-20 bg-gray-50 rounded-[3rem] border border-gray-100"
+                className={`text-center py-20 ${theme.card} rounded-[3rem] border shadow-2xl`}
               >
-                <div className="w-20 h-20 bg-black text-white rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl">
+                <div className={`w-20 h-20 ${theme.accent} text-white rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-2xl`}>
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
-                <h2 className="text-3xl font-bold tracking-tight mb-4">Message Sent!</h2>
-                <p className="text-gray-500 mb-12 max-w-xs mx-auto">
+                <h2 className={`text-3xl font-bold tracking-tight mb-4 ${theme.text}`}>Whisper Sent!</h2>
+                <p className={`${theme.text} opacity-60 mb-12 max-w-xs mx-auto`}>
                   Your message has been delivered to @{user.username} anonymously.
                 </p>
-                <div className="space-y-4">
+                <div className="space-y-4 px-8">
                   <button 
                     onClick={() => setSent(false)}
-                    className="w-full max-w-xs py-4 bg-white border border-gray-200 rounded-full font-bold hover:bg-gray-100 transition-all"
+                    className={`w-full py-4 bg-white/10 border border-white/20 rounded-full font-bold hover:bg-white/20 transition-all ${theme.text}`}
                   >
                     Send another
                   </button>
                   <div className="block">
-                    <Link to="/auth" className="text-sm font-bold text-gray-400 hover:text-black transition-colors uppercase tracking-widest">
+                    <Link to="/auth" className={`text-sm font-bold ${theme.text} opacity-40 hover:opacity-100 transition-opacity uppercase tracking-widest`}>
                       Create your own link
                     </Link>
                   </div>
