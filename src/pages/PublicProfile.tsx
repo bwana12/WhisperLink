@@ -51,6 +51,24 @@ export default function PublicProfile() {
   const [activePrompt, setActivePrompt] = useState<string | null>(null);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
+  const [publicMessages, setPublicMessages] = useState<any[]>([]);
+  const [showFeed, setShowFeed] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(
+      collection(db, 'messages'),
+      where('recipientId', '==', user.userId),
+      where('reply', '!=', null),
+      orderBy('reply'),
+      limit(10)
+    );
+    getDocs(q).then(snapshot => {
+      setPublicMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }).catch(error => {
+      console.error("Error fetching public feed:", error);
+    });
+  }, [user]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -172,23 +190,6 @@ export default function PublicProfile() {
   }
 
   const theme = THEMES[user.theme || 'default'] || THEMES.default;
-
-  const [publicMessages, setPublicMessages] = useState<any[]>([]);
-  const [showFeed, setShowFeed] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    const q = query(
-      collection(db, 'messages'),
-      where('recipientId', '==', user.userId),
-      where('reply', '!=', null),
-      orderBy('reply'), // This is a trick to filter for non-null replies
-      limit(10)
-    );
-    getDocs(q).then(snapshot => {
-      setPublicMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-  }, [user]);
 
   return (
     <div className={`min-h-screen ${theme.background} selection:bg-black selection:text-white transition-colors duration-700`}>

@@ -148,6 +148,9 @@ export default function Dashboard() {
     const unsubscribeAnalytics = onSnapshot(aq, (snapshot) => {
       const data = snapshot.docs.map(doc => doc.data() as AnalyticsData);
       setAnalytics(data);
+    }, (error) => {
+      console.error("Analytics error:", error);
+      // Don't throw here to avoid crashing the whole dashboard if analytics fail
     });
 
     return () => {
