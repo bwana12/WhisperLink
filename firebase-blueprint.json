@@ -9,7 +9,9 @@
         "username": { "type": "string", "description": "Unique username for the public link" },
         "email": { "type": "string", "format": "email" },
         "createdAt": { "type": "string", "format": "date-time" },
-        "photoURL": { "type": "string", "format": "uri" }
+        "photoURL": { "type": "string", "format": "uri" },
+        "themeColor": { "type": "string", "description": "Hex color for profile theme" },
+        "profilePrompt": { "type": "string", "description": "Custom prompt for visitors" }
       },
       "required": ["userId", "username", "email", "createdAt"]
     },
@@ -23,7 +25,10 @@
         "content": { "type": "string", "description": "The message text" },
         "createdAt": { "type": "string", "format": "date-time" },
         "isRead": { "type": "boolean" },
-        "isReported": { "type": "boolean" }
+        "isReported": { "type": "boolean" },
+        "reaction": { "type": "string", "description": "Emoji reaction from recipient" },
+        "reply": { "type": "string", "description": "Public reply from recipient" },
+        "repliedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["recipientId", "content", "createdAt", "isRead"]
     },
