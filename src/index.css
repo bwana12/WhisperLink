@@ -7,11 +7,7 @@
 
 @layer base {
   body {
-    @apply font-sans transition-colors duration-300;
+    @apply font-sans;
   }
-}
-
-.dark body {
-  @apply bg-zinc-950 text-white;
 }
 
