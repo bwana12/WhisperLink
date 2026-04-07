@@ -1,13 +1,30 @@
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { initializeApp, FirebaseApp } from 'firebase/app';
+import { getAuth, Auth } from 'firebase/auth';
+import { getFirestore, Firestore } from 'firebase/firestore';
+import { getStorage, FirebaseStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-export const storage = getStorage(app);
+let app: FirebaseApp;
+let auth: Auth;
+let db: Firestore;
+let storage: FirebaseStorage;
+
+try {
+  if (!firebaseConfig || !firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
+    throw new Error("Firebase configuration is missing or contains placeholder values. Please check firebase-applet-config.json.");
+  }
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  storage = getStorage(app);
+} catch (error) {
+  console.error("Firebase initialization failed:", error);
+  // Fallback to avoid crashing the whole module load, 
+  // though subsequent calls to auth/db will fail if not handled.
+  // This allows the ErrorBoundary to potentially catch errors during component rendering instead.
+}
+
+export { auth, db, storage };
 
 export enum OperationType {
   CREATE = 'create',

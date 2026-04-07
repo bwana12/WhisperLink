@@ -95,7 +95,10 @@ export default function Dashboard() {
   const [replyText, setReplyText] = useState('');
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) {
+      if (!db) setLoading(false);
+      return;
+    }
 
     // Fetch user profile
     const fetchProfile = async () => {

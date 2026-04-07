@@ -30,6 +30,12 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
 
+    if (!auth || !db) {
+      toast.error('Firebase is not initialized. Check your configuration.');
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, formData.email, formData.password);

@@ -55,7 +55,7 @@ export default function PublicProfile() {
   const [showFeed, setShowFeed] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !db) return;
     const q = query(
       collection(db, 'messages'),
       where('recipientId', '==', user.userId),
@@ -72,7 +72,10 @@ export default function PublicProfile() {
 
   useEffect(() => {
     const fetchUser = async () => {
-      if (!username) return;
+      if (!username || !db) {
+        if (!db) setLoading(false);
+        return;
+      }
       try {
         const q = query(collection(db, 'users'), where('username', '==', username.toLowerCase()));
         const snapshot = await getDocs(q);
