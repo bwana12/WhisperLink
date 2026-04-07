@@ -23,9 +23,17 @@ interface AnalyticsChartProps {
 export default function AnalyticsChart({ data }: AnalyticsChartProps) {
   const sortedData = [...data].sort((a, b) => a.date.localeCompare(b.date));
 
+  if (data.length === 0) {
+    return (
+      <div className="h-[300px] w-full flex items-center justify-center text-gray-400 font-medium italic">
+        No activity data yet.
+      </div>
+    );
+  }
+
   return (
-    <div className="h-[300px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[300px] w-full min-w-0">
+      <ResponsiveContainer width="100%" height="100%" debounce={1} minWidth={0} minHeight={0}>
         <AreaChart
           data={sortedData}
           margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
