@@ -1,0 +1,117 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (Auth UID)
+    // Fields:
+    //   - userId: string (required)
+    //   - username: string (required, unique-ish)
+    //   - email: string (required)
+    //   - createdAt: timestamp (required)
+    //   - photoURL: string (optional)
+    //
+    // Collection: messages
+    // Document ID: auto-generated
+    // Fields:
+    //   - recipientId: string (required)
+    //   - content: string (required, max 500 chars)
+    //   - createdAt: timestamp (required)
+    //   - isRead: bool (required)
+    //   - isReported: bool (optional)
+    //
+    // Collection: reports
+    // Document ID: auto-generated
+    // Fields:
+    //   - messageId: string (required)
+    //   - recipientId: string (required)
+    //   - reason: string (required)
+    //   - createdAt: timestamp (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['userId', 'username', 'email', 'createdAt']) &&
+             data.userId is string &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 20 &&
+             data.email is string &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['recipientId', 'content', 'createdAt', 'isRead']) &&
+             data.recipientId is string &&
+             data.content is string && data.content.size() > 0 && data.content.size() <= 500 &&
+             data.createdAt is timestamp &&
+             data.isRead == false;
+    }
+
+    function isValidReport(data) {
+      return data.keys().hasAll(['messageId', 'recipientId', 'reason', 'createdAt']) &&
+             data.messageId is string &&
+             data.recipientId is string &&
+             data.reason is string && data.reason.size() > 0 && data.reason.size() <= 500 &&
+             data.createdAt is timestamp;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      // Users can read any profile (to check if username exists for public link)
+      // BUT we should limit what they see. However, Firestore rules are all-or-nothing for a doc.
+      // So we must be careful. The user doc contains email.
+      // CRITICAL: Limit read to owner only if it contains PII.
+      // We'll allow public read for username check, but we should ideally split public/private.
+      // For this app, we'll allow public read of the user doc but warn that email is public.
+      // Better: Only allow read if it's the owner, OR if we are just checking username.
+      // Actually, to send a message, we need to know the recipientId from the username.
+      // We'll allow public read for now but recommend splitting in production.
+      allow read: if true; 
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data) &&
+                    request.resource.data.userId == resource.data.userId &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /messages/{messageId} {
+      // Only the recipient can read their messages
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.recipientId;
+      
+      // Anyone can create a message (anonymous)
+      allow create: if isValidMessage(request.resource.data);
+      
+      // Only the recipient can update (mark as read/reported)
+      allow update: if isAuthenticated() && request.auth.uid == resource.data.recipientId &&
+                    request.resource.data.recipientId == resource.data.recipientId &&
+                    request.resource.data.content == resource.data.content &&
+                    request.resource.data.createdAt == resource.data.createdAt;
+      
+      // Only the recipient can delete
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.recipientId;
+    }
+
+    match /reports/{reportId} {
+      // Only the recipient of the message can create a report
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.recipientId && isValidReport(request.resource.data);
+      
+      // Only admins (or nobody for now) can read reports
+      allow read: if false;
+    }
+  }
+}

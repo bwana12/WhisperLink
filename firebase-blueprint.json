@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A registered user of WhisperLink",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID" },
+        "username": { "type": "string", "description": "Unique username for the public link" },
+        "email": { "type": "string", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "photoURL": { "type": "string", "format": "uri" }
+      },
+      "required": ["userId", "username", "email", "createdAt"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "An anonymous message sent to a user",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string" },
+        "recipientId": { "type": "string", "description": "UID of the user receiving the message" },
+        "content": { "type": "string", "description": "The message text" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isRead": { "type": "boolean" },
+        "isReported": { "type": "boolean" }
+      },
+      "required": ["recipientId", "content", "createdAt", "isRead"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "A report for a malicious message",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string" },
+        "messageId": { "type": "string" },
+        "recipientId": { "type": "string" },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["messageId", "recipientId", "reason", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Anonymous messages"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Message reports"
+    }
+  }
+}
