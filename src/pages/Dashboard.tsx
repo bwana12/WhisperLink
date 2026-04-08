@@ -63,6 +63,7 @@ interface Message {
   reply?: string;
   isVoice?: boolean;
   voiceUrl?: string;
+  voiceData?: string;
   status?: string;
 }
 
@@ -476,7 +477,7 @@ export default function Dashboard() {
                       </div>
 
                       <div className="space-y-4">
-                        {message.isVoice && message.voiceUrl ? (
+                        {message.isVoice && (message.voiceUrl || message.voiceData) ? (
                           <div className={cn(
                             "p-4 rounded-2xl flex items-center gap-4",
                             profile?.isDarkMode ? "bg-slate-800" : "bg-gray-50"
@@ -484,7 +485,7 @@ export default function Dashboard() {
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const audio = new Audio(message.voiceUrl);
+                                const audio = new Audio(message.voiceUrl || message.voiceData);
                                 audio.play();
                               }}
                               className={cn(

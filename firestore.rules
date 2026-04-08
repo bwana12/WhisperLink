@@ -73,7 +73,8 @@ service cloud.firestore {
              data.createdAt is timestamp &&
              data.isRead == false &&
              (!('isVoice' in data) || data.isVoice is bool) &&
-             (!('voiceUrl' in data) || data.voiceUrl is string);
+             (!('voiceUrl' in data) || data.voiceUrl is string) &&
+             (!('voiceData' in data) || (data.voiceData is string && data.voiceData.size() < 900000));
     }
 
     function isValidAnalytics(data) {

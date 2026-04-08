@@ -136,10 +136,29 @@ export default function PublicProfile() {
       }
 
       let voiceUrl = '';
+      let voiceBase64 = '';
+      
       if (voiceBlob) {
-        const voiceRef = ref(storage, `voices/${user.userId}/${Date.now()}.webm`);
-        await uploadBytes(voiceRef, voiceBlob);
-        voiceUrl = await getDownloadURL(voiceRef);
+        try {
+          if (!storage) throw new Error('Storage not initialized');
+          
+          const voiceRef = ref(storage, `voices/${user.userId}/${Date.now()}.webm`);
+          await uploadBytes(voiceRef, voiceBlob);
+          voiceUrl = await getDownloadURL(voiceRef);
+        } catch (storageError) {
+          console.error('Storage upload failed, falling back to Base64:', storageError);
+          // Fallback: Convert to Base64 and store in Firestore if small enough
+          if (voiceBlob.size > 800000) { // ~800KB limit for safety
+            throw new Error('Voice message too large for fallback storage. Please try again.');
+          }
+          
+          voiceBase64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(voiceBlob);
+          });
+        }
       }
 
       await addDoc(collection(db, 'messages'), {
@@ -149,6 +168,7 @@ export default function PublicProfile() {
         isRead: false,
         isVoice: !!voiceBlob,
         voiceUrl: voiceUrl,
+        voiceData: voiceBase64, // Fallback data
         status: 'delivered'
       });
 
