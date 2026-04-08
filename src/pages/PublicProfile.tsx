@@ -279,20 +279,33 @@ export default function PublicProfile() {
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.9 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="mt-4 p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl inline-flex items-center gap-3"
+                      className="mt-4 p-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl inline-flex flex-col items-center gap-2"
                     >
-                      <Sparkles className="w-4 h-4 text-yellow-500" />
-                      <p className={`text-sm font-medium ${theme.text}`}>{activePrompt}</p>
-                      <button 
-                        onClick={() => {
-                          if (user.prompts) {
-                            setActivePrompt(user.prompts[Math.floor(Math.random() * user.prompts.length)]);
-                          }
-                        }}
-                        className="p-1 hover:bg-white/10 rounded-lg transition-colors"
-                      >
-                        <RefreshCcw size={14} className={theme.text} />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <Sparkles className="w-4 h-4 text-yellow-500" />
+                        <button 
+                          onClick={() => {
+                            setMessage(activePrompt);
+                            setIsVoiceMode(false);
+                            toast.success('Prompt applied!');
+                          }}
+                          className={`text-sm font-medium ${theme.text} hover:opacity-80 transition-opacity text-left`}
+                        >
+                          {activePrompt}
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (user.prompts) {
+                              setActivePrompt(user.prompts[Math.floor(Math.random() * user.prompts.length)]);
+                            }
+                          }}
+                          className="p-1 hover:bg-white/10 rounded-lg transition-colors"
+                          title="New prompt"
+                        >
+                          <RefreshCcw size={14} className={theme.text} />
+                        </button>
+                      </div>
+                      <p className={`text-[10px] font-bold uppercase tracking-widest opacity-40 ${theme.text}`}>Click text to use as template</p>
                     </motion.div>
                   )}
                 </div>

@@ -110,6 +110,9 @@ export default function Dashboard() {
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      } finally {
+        // Ensure loading is only finished after profile is at least attempted
+        setLoading(false);
       }
     };
 
@@ -129,7 +132,6 @@ export default function Dashboard() {
         ...doc.data()
       })) as Message[];
       setMessages(msgs);
-      setLoading(false);
 
       // Mark unread as read receipt (delivered -> read)
       msgs.forEach(msg => {
