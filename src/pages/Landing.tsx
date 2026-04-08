@@ -1,11 +1,18 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { MessageSquare, Shield, Zap, ArrowRight } from 'lucide-react';
+import { MessageSquare, Shield, Zap, ArrowRight, ChevronDown } from 'lucide-react';
 import { useAuth } from '../components/AuthProvider';
+import LegalModal from '../components/LegalModal';
 
 export default function Landing() {
   const { user } = useAuth();
+  const [modalType, setModalType] = React.useState<'privacy' | 'terms' | 'contact' | null>(null);
+
+  const scrollToHowItWorks = () => {
+    const element = document.getElementById('how-it-works');
+    element?.scrollIntoView({ behavior: 'smooth' });
+  };
 
   React.useEffect(() => {
     document.title = 'WhisperLink | Anonymous Messaging';
@@ -71,7 +78,10 @@ export default function Landing() {
                 Create your link
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
-              <button className="w-full sm:w-auto px-8 py-4 border border-gray-200 rounded-full text-lg font-medium hover:bg-gray-50 transition-all">
+              <button 
+                onClick={scrollToHowItWorks}
+                className="w-full sm:w-auto px-8 py-4 border border-gray-200 rounded-full text-lg font-medium hover:bg-gray-50 transition-all"
+              >
                 How it works
               </button>
             </div>
@@ -80,7 +90,7 @@ export default function Landing() {
       </section>
 
       {/* Features */}
-      <section className="py-20 px-6 bg-gray-50">
+      <section id="how-it-works" className="py-20 px-6 bg-gray-50">
         <div className="max-w-7xl mx-auto">
           <div className="grid md:grid-cols-3 gap-12">
             <div className="space-y-4">
@@ -124,13 +134,19 @@ export default function Landing() {
             <span className="font-bold">WhisperLink</span>
           </div>
           <div className="flex gap-8 text-sm text-gray-500">
-            <a href="#" className="hover:text-black transition-colors">Privacy</a>
-            <a href="#" className="hover:text-black transition-colors">Terms</a>
-            <a href="#" className="hover:text-black transition-colors">Contact</a>
+            <button onClick={() => setModalType('privacy')} className="hover:text-black transition-colors">Privacy</button>
+            <button onClick={() => setModalType('terms')} className="hover:text-black transition-colors">Terms</button>
+            <button onClick={() => setModalType('contact')} className="hover:text-black transition-colors">Contact</button>
           </div>
           <p className="text-sm text-gray-400">© 2026 WhisperLink. All rights reserved.</p>
         </div>
       </footer>
+
+      <LegalModal 
+        isOpen={!!modalType} 
+        onClose={() => setModalType(null)} 
+        type={modalType || 'privacy'} 
+      />
     </div>
   );
 }

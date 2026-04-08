@@ -45,13 +45,16 @@ import {
   Plus,
   X,
   ShieldAlert,
-  Download
+  Download,
+  Mail,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatDate, cn } from '../lib/utils';
 import toast from 'react-hot-toast';
 import AnalyticsChart from '../components/AnalyticsChart';
 import StoryGenerator from '../components/StoryGenerator';
+import LegalModal from '../components/LegalModal';
 import { THEMES } from '../constants/themes';
 
 interface Message {
@@ -96,6 +99,7 @@ export default function Dashboard() {
   const [selectedStoryMessage, setSelectedStoryMessage] = useState<Message | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [modalType, setModalType] = useState<'privacy' | 'terms' | 'contact' | null>(null);
 
   useEffect(() => {
     if (!user || !db) {
@@ -838,7 +842,37 @@ export default function Dashboard() {
             )}
           </AnimatePresence>
         </div>
+
+        {/* Simple Footer */}
+        <footer className={cn(
+          "mt-20 py-12 border-t text-center md:text-left",
+          profile?.isDarkMode ? "border-slate-800" : "border-gray-100"
+        )}>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="flex items-center gap-2">
+              <div className={cn(
+                "w-6 h-6 rounded flex items-center justify-center",
+                profile?.isDarkMode ? "bg-indigo-500" : "bg-black"
+              )}>
+                <MessageSquare className="w-4 h-4 text-white" />
+              </div>
+              <span className="font-bold">WhisperLink</span>
+            </div>
+            <div className={cn("flex gap-8 text-sm", profile?.isDarkMode ? "text-slate-500" : "text-gray-400")}>
+              <button onClick={() => setModalType('privacy')} className="hover:text-indigo-500 transition-colors">Privacy</button>
+              <button onClick={() => setModalType('terms')} className="hover:text-indigo-500 transition-colors">Terms</button>
+              <button onClick={() => setModalType('contact')} className="hover:text-indigo-500 transition-colors">Contact</button>
+            </div>
+            <p className={cn("text-sm", profile?.isDarkMode ? "text-slate-600" : "text-gray-300")}>© 2026 WhisperLink</p>
+          </div>
+        </footer>
       </main>
+
+      <LegalModal 
+        isOpen={!!modalType} 
+        onClose={() => setModalType(null)} 
+        type={modalType || 'privacy'} 
+      />
 
       {/* Story Generator Modal */}
       {selectedStoryMessage && profile && (

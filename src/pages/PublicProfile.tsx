@@ -24,7 +24,9 @@ import {
   Mic, 
   AlertCircle,
   Sparkles,
-  RefreshCcw
+  RefreshCcw,
+  Mail,
+  FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
@@ -32,6 +34,7 @@ import { moderateContent } from '../services/moderationService';
 import { trackVisit, trackMessage } from '../services/analyticsService';
 import { THEMES } from '../constants/themes';
 import VoiceRecorder from '../components/VoiceRecorder';
+import LegalModal from '../components/LegalModal';
 
 interface UserProfile {
   userId: string;
@@ -55,6 +58,7 @@ export default function PublicProfile() {
   const [voiceBlob, setVoiceBlob] = useState<Blob | null>(null);
   const [publicMessages, setPublicMessages] = useState<any[]>([]);
   const [showFeed, setShowFeed] = useState(false);
+  const [modalType, setModalType] = useState<'privacy' | 'terms' | 'contact' | null>(null);
 
   useEffect(() => {
     if (!user || !db) return;
@@ -454,6 +458,30 @@ export default function PublicProfile() {
           </AnimatePresence>
         </div>
       </main>
+
+      {/* Simple Footer */}
+      <footer className={`py-12 px-6 border-t border-black/5 ${theme.background}`}>
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row items-center justify-between gap-8">
+          <div className="flex items-center gap-2">
+            <div className={`w-6 h-6 ${theme.accent} rounded flex items-center justify-center`}>
+              <MessageSquare className="w-4 h-4 text-white" />
+            </div>
+            <span className={`font-bold ${theme.text}`}>WhisperLink</span>
+          </div>
+          <div className={`flex gap-8 text-sm ${theme.text} opacity-40`}>
+            <button onClick={() => setModalType('privacy')} className="hover:opacity-100 transition-opacity">Privacy</button>
+            <button onClick={() => setModalType('terms')} className="hover:opacity-100 transition-opacity">Terms</button>
+            <button onClick={() => setModalType('contact')} className="hover:opacity-100 transition-opacity">Contact</button>
+          </div>
+          <p className={`text-sm ${theme.text} opacity-30`}>© 2026 WhisperLink</p>
+        </div>
+      </footer>
+
+      <LegalModal 
+        isOpen={!!modalType} 
+        onClose={() => setModalType(null)} 
+        type={modalType || 'privacy'} 
+      />
     </div>
   );
 }
