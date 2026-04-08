@@ -11,7 +11,9 @@ import {
   addDoc, 
   getDoc,
   Timestamp,
-  limit
+  limit,
+  arrayUnion,
+  arrayRemove
 } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -101,22 +103,17 @@ export default function Dashboard() {
       return;
     }
 
-    // Fetch user profile
-    const fetchProfile = async () => {
-      try {
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setProfile(userDoc.data() as UserProfile);
-        }
-      } catch (error) {
-        handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
-      } finally {
-        // Ensure loading is only finished after profile is at least attempted
-        setLoading(false);
+    // Listen for user profile
+    const unsubscribeProfile = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setProfile(docSnap.data() as UserProfile);
       }
-    };
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, `users/${user.uid}`);
+      setLoading(false);
+    });
 
-    fetchProfile();
     document.title = 'Your Inbox | WhisperLink';
 
     // Listen for messages
@@ -160,6 +157,7 @@ export default function Dashboard() {
     });
 
     return () => {
+      unsubscribeProfile();
       unsubscribeMessages();
       unsubscribeAnalytics();
     };
@@ -218,6 +216,54 @@ export default function Dashboard() {
     setCopied(true);
     toast.success('Link copied to clipboard!');
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const addPrompt = async (prompt: string) => {
+    if (!user || !prompt.trim()) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        prompts: arrayUnion(prompt.trim())
+      });
+      toast.success('Prompt added');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  };
+
+  const removePrompt = async (prompt: string) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        prompts: arrayRemove(prompt)
+      });
+      toast.success('Prompt removed');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  };
+
+  const addBlacklistWord = async (word: string) => {
+    if (!user || !word.trim()) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        blacklist: arrayUnion(word.trim().toLowerCase())
+      });
+      toast.success('Word blacklisted');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+    }
+  };
+
+  const removeBlacklistWord = async (word: string) => {
+    if (!user) return;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        blacklist: arrayRemove(word)
+      });
+      toast.success('Word removed');
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `users/${user.uid}`);
+    }
   };
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
@@ -689,12 +735,28 @@ export default function Dashboard() {
                           if (e.key === 'Enter') {
                             const val = e.currentTarget.value.trim();
                             if (val) {
-                              updateProfile({ prompts: [...(profile?.prompts || []), val] });
+                              addPrompt(val);
                               e.currentTarget.value = '';
                             }
                           }
                         }}
                       />
+                      <button 
+                        onClick={(e) => {
+                          const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                          const val = input.value.trim();
+                          if (val) {
+                            addPrompt(val);
+                            input.value = '';
+                          }
+                        }}
+                        className={cn(
+                          "px-6 py-2 text-white rounded-xl font-bold transition-all",
+                          profile?.isDarkMode ? "bg-indigo-600 hover:bg-indigo-500" : "bg-black hover:bg-gray-800"
+                        )}
+                      >
+                        Add
+                      </button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {profile?.prompts?.map((prompt, i) => (
@@ -704,7 +766,7 @@ export default function Dashboard() {
                         )}>
                           {prompt}
                           <button 
-                            onClick={() => updateProfile({ prompts: profile.prompts?.filter((_, idx) => idx !== i) })}
+                            onClick={() => removePrompt(prompt)}
                             className="hover:text-red-500"
                           >
                             <X size={14} />
@@ -725,28 +787,46 @@ export default function Dashboard() {
                     <h3 className="text-xl font-bold">Word Blacklist</h3>
                   </div>
                   <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      placeholder="Add a blocked word..."
-                      className={cn(
-                        "w-full p-4 rounded-2xl border-2 outline-none transition-all",
-                        profile?.isDarkMode ? "bg-slate-800 border-slate-700 focus:border-indigo-500" : "bg-gray-50 border-transparent focus:border-black"
-                      )}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const val = e.currentTarget.value.trim();
-                          if (val) {
-                            updateProfile({ blacklist: [...(profile?.blacklist || []), val] });
-                            e.currentTarget.value = '';
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        placeholder="Add a blocked word..."
+                        className={cn(
+                          "flex-1 p-4 rounded-2xl border-2 outline-none transition-all",
+                          profile?.isDarkMode ? "bg-slate-800 border-slate-700 focus:border-indigo-500" : "bg-gray-50 border-transparent focus:border-black"
+                        )}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const val = e.currentTarget.value.trim();
+                            if (val) {
+                              addBlacklistWord(val);
+                              e.currentTarget.value = '';
+                            }
                           }
-                        }
-                      }}
-                    />
+                        }}
+                      />
+                      <button 
+                        onClick={(e) => {
+                          const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                          const val = input.value.trim();
+                          if (val) {
+                            addBlacklistWord(val);
+                            input.value = '';
+                          }
+                        }}
+                        className={cn(
+                          "px-6 py-2 text-white rounded-xl font-bold transition-all",
+                          profile?.isDarkMode ? "bg-indigo-600 hover:bg-indigo-500" : "bg-black hover:bg-gray-800"
+                        )}
+                      >
+                        Block
+                      </button>
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       {profile?.blacklist?.map((word, i) => (
-                        <div key={i} className="px-4 py-2 bg-red-500/10 text-red-500 rounded-full flex items-center gap-2 text-sm font-bold">
+                        <div key={word} className="px-4 py-2 bg-red-500/10 text-red-500 rounded-full flex items-center gap-2 text-sm font-bold">
                           {word}
-                          <button onClick={() => updateProfile({ blacklist: profile.blacklist?.filter((_, idx) => idx !== i) })}>
+                          <button onClick={() => removeBlacklistWord(word)}>
                             <X size={14} />
                           </button>
                         </div>

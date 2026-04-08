@@ -8,7 +8,9 @@ import {
   addDoc, 
   Timestamp,
   orderBy,
-  limit
+  limit,
+  doc,
+  onSnapshot
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
@@ -71,6 +73,8 @@ export default function PublicProfile() {
   }, [user]);
 
   useEffect(() => {
+    let unsubscribe: () => void = () => {};
+
     const fetchUser = async () => {
       if (!username || !db) {
         if (!db) setLoading(false);
@@ -80,17 +84,21 @@ export default function PublicProfile() {
         const q = query(collection(db, 'users'), where('username', '==', username.toLowerCase()));
         const snapshot = await getDocs(q);
         if (!snapshot.empty) {
-          const userData = snapshot.docs[0].data() as UserProfile;
+          const userDoc = snapshot.docs[0];
+          const userData = userDoc.data() as UserProfile;
           setUser(userData);
           document.title = `Send a message to @${userData.username} | WhisperLink`;
           
-          // Track visit
-          trackVisit(userData.userId);
+          // Track visit (non-blocking)
+          trackVisit(userData.userId).catch(err => console.error('Analytics error:', err));
 
-          // Set random prompt if available
-          if (userData.prompts && userData.prompts.length > 0) {
-            setActivePrompt(userData.prompts[Math.floor(Math.random() * userData.prompts.length)]);
-          }
+          // Set up real-time listener for this user
+          unsubscribe = onSnapshot(doc(db, 'users', userDoc.id), (docSnap) => {
+            if (docSnap.exists()) {
+              const updatedData = docSnap.data() as UserProfile;
+              setUser(updatedData);
+            }
+          });
         }
       } catch (error) {
         handleFirestoreError(error, OperationType.GET, 'users');
@@ -100,7 +108,20 @@ export default function PublicProfile() {
     };
 
     fetchUser();
+    return () => unsubscribe();
   }, [username]);
+
+  // Pick random prompt when user prompts change
+  useEffect(() => {
+    if (user?.prompts && user.prompts.length > 0) {
+      // Only pick a new one if we don't have one or if the current one was removed
+      if (!activePrompt || !user.prompts.includes(activePrompt)) {
+        setActivePrompt(user.prompts[Math.floor(Math.random() * user.prompts.length)]);
+      }
+    } else {
+      setActivePrompt(null);
+    }
+  }, [user?.prompts]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
