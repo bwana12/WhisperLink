@@ -14,8 +14,9 @@ function getAI() {
 }
 
 export async function moderateContent(content: string): Promise<{ isSafe: boolean; reason?: string }> {
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn("GEMINI_API_KEY is missing. Skipping AI moderation.");
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'undefined') {
+    console.warn("GEMINI_API_KEY is missing or undefined. Skipping AI moderation.");
     return { isSafe: true };
   }
 

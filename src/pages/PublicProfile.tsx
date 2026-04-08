@@ -124,11 +124,14 @@ export default function PublicProfile() {
     }
 
     setSending(true);
+    const sendToast = toast.loading('Sending your whisper...');
+    
     try {
       // AI Moderation
-      if (message) {
+      if (message.trim()) {
         const moderation = await moderateContent(message);
         if (!moderation.isSafe) {
+          toast.dismiss(sendToast);
           toast.error(`Message blocked: ${moderation.reason}`);
           setSending(false);
           return;
@@ -143,13 +146,20 @@ export default function PublicProfile() {
           if (!storage) throw new Error('Storage not initialized');
           
           const voiceRef = ref(storage, `voices/${user.userId}/${Date.now()}.webm`);
-          await uploadBytes(voiceRef, voiceBlob);
+          
+          // Add a timeout to the upload
+          const uploadPromise = uploadBytes(voiceRef, voiceBlob);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Upload timeout')), 10000)
+          );
+          
+          await Promise.race([uploadPromise, timeoutPromise]);
           voiceUrl = await getDownloadURL(voiceRef);
         } catch (storageError) {
           console.error('Storage upload failed, falling back to Base64:', storageError);
-          // Fallback: Convert to Base64 and store in Firestore if small enough
-          if (voiceBlob.size > 800000) { // ~800KB limit for safety
-            throw new Error('Voice message too large for fallback storage. Please try again.');
+          
+          if (voiceBlob.size > 800000) {
+            throw new Error('Voice message too large. Please record a shorter message.');
           }
           
           voiceBase64 = await new Promise((resolve, reject) => {
@@ -157,33 +167,43 @@ export default function PublicProfile() {
             reader.onloadend = () => resolve(reader.result as string);
             reader.onerror = reject;
             reader.readAsDataURL(voiceBlob);
+            // Timeout for reader
+            setTimeout(() => reject(new Error('File reading timeout')), 5000);
           });
         }
       }
 
-      await addDoc(collection(db, 'messages'), {
+      const messageData = {
         recipientId: user.userId,
         content: message.trim() || '🎤 Voice Whisper',
         createdAt: Timestamp.now(),
         isRead: false,
         isVoice: !!voiceBlob,
         voiceUrl: voiceUrl,
-        voiceData: voiceBase64, // Fallback data
+        voiceData: voiceBase64,
         status: 'delivered'
-      });
+      };
 
-      // Track message
-      trackMessage(user.userId);
+      await addDoc(collection(db, 'messages'), messageData);
+
+      // Track message (non-blocking)
+      trackMessage(user.userId).catch(err => console.error('Analytics error:', err));
       
-      // Update rate limit
       localStorage.setItem(`last_sent_${user.userId}`, Date.now().toString());
 
       setSent(true);
       setMessage('');
       setVoiceBlob(null);
+      toast.dismiss(sendToast);
       toast.success('Whisper sent anonymously!');
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'messages');
+    } catch (error: any) {
+      toast.dismiss(sendToast);
+      console.error('Send error:', error);
+      if (error.message?.includes('timeout')) {
+        toast.error('Connection timed out. Please try again.');
+      } else {
+        toast.error('Failed to send whisper. Please check your connection.');
+      }
     } finally {
       setSending(false);
     }
